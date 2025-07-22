@@ -25,6 +25,6 @@ Aprovecharé el código del otro proyecto en la medida de lo posible.
 * Una seríe de Lamdas que se llamen entre sí en AWS. Ejecutar el código periodicamente y almacenar los datos en S3
 * Emplear Power Bi o un programa de analitica en AWS para la visualización de estos datos. 
 * Hacer un pequeño front en React.
-** Elegir el elemento/s a buscar
-** Elegir la periodicidad a buscar
-** modificar whitelists y blacklists
+  *   Elegir el elemento/s a buscar
+  * Elegir la periodicidad a buscar
+  * modificar whitelists y blacklists

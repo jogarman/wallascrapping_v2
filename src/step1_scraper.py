@@ -29,6 +29,8 @@ def setup_driver():
     options.add_argument('--disable-gpu')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    
     
     # Try to install driver, fallback to default if fails (Github Actions usually needs specific setup)
     try:
@@ -143,12 +145,15 @@ def scrape_item(driver, item_config):
         else:
              print("Botón no encontrado ni siquiera con JS + Shadow DOM search.")
              # Dump page source snippet for debug if allowed (optional, keeping it simple for now)
-             raise Exception("Botón no encontrado")
+             print("Botón no encontrado ni siquiera con JS + Shadow DOM search. Posiblemente hay pocos resultados o es la ultima pagina.")
+             # Dump page source snippet for debug if allowed (optional, keeping it simple for now)
+             pass # Continue without crashing
+
 
     except Exception as e:
-        logger.error(f"CRITICO: Boton ver mas no encontrado o error al clicar. Deteniendo ejecución. Error: {e}")
-        driver.quit()
-        raise e
+        logger.warning(f"Aviso: No se pudo pulsar 'Cargar más' (puede no existir). Error: {e}")
+        # driver.quit() # Do not quit, try to scrape what we have
+        # raise e
     time.sleep(2)
 
     # Main Scroll Loop

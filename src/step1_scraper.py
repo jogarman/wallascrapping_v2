@@ -169,9 +169,9 @@ def scrape_item(driver, item_config):
 
 
     except Exception as e:
-        logger.warning(f"Aviso: No se pudo pulsar 'Cargar más' (puede no existir). Error: {e}")
-        # driver.quit() # Do not quit, try to scrape what we have
-        # raise e
+        logger.error(f"CRITICO: Boton ver mas no encontrado o error al clicar. Deteniendo ejecución. Error: {e}")
+        driver.quit()
+        raise e
     time.sleep(2)
 
     # Main Scroll Loop

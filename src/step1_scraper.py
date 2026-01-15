@@ -163,9 +163,9 @@ def scrape_item(driver, item_config):
         else:
              print("Botón no encontrado ni siquiera con JS + Shadow DOM search.")
              # Dump page source snippet for debug if allowed (optional, keeping it simple for now)
-             print("Botón no encontrado ni siquiera con JS + Shadow DOM search. Posiblemente hay pocos resultados o es la ultima pagina.")
+             print("Botón no encontrado ni siquiera con JS + Shadow DOM search.")
              # Dump page source snippet for debug if allowed (optional, keeping it simple for now)
-             pass # Continue without crashing
+             raise Exception("Botón no encontrado")
 
 
     except Exception as e:

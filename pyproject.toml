@@ -13,7 +13,10 @@ dependencies = [
     "beautifulsoup4",
     "beautifulsoup4",
     "requests",
-    "undetected-chromedriver"
+    "beautifulsoup4",
+    "requests",
+    "undetected-chromedriver",
+    "setuptools"
 ]
 
 [tool.uv]

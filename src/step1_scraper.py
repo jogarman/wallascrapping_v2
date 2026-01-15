@@ -10,7 +10,10 @@ Funcionalidades principales:
 import logging
 import time
 import pandas as pd
+import setuptools # Required to patch distutils
+import distutils
 from datetime import datetime
+
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager

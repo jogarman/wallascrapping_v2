@@ -30,8 +30,8 @@ env/
 .env
 
 # Data
-data/*
-!data/.gitkeep
+# data/*
+# !data/.gitkeep
 scrapping_outputs/
 # Chrome driver if local
 chromedriver

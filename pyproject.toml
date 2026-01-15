@@ -11,7 +11,9 @@ dependencies = [
     "python-dotenv",
     "google-generativeai",
     "beautifulsoup4",
-    "requests"
+    "beautifulsoup4",
+    "requests",
+    "undetected-chromedriver"
 ]
 
 [tool.uv]

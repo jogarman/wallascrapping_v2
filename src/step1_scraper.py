@@ -22,23 +22,38 @@ from .utils import get_coords
 
 logger = logging.getLogger(__name__)
 
+import undetected_chromedriver as uc
+
 def setup_driver():
-    options = webdriver.ChromeOptions()
+    options = uc.ChromeOptions()
     if CONFIG["scraping"].get("headless", True):
-        options.add_argument('--headless')
+        # UC expects this for headless
+        options.add_argument('--headless=new') 
+        
     options.add_argument('--disable-gpu')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    options.add_argument('--window-size=1920,1080')
     
+    # Enable shadow-root (UC handles this well, but just in case)
     
-    # Try to install driver, fallback to default if fails (Github Actions usually needs specific setup)
     try:
-        service = ChromeService(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
+        # uc automatically handles driver download and patching
+        # version_main allows pinning major version if needed, but usually auto is best
+        driver = uc.Chrome(options=options)
     except Exception as e:
-        logger.warning(f"Failed to install driver with manager: {e}. Trying default Selenium driver.")
-        driver = webdriver.Chrome(options=options)
+        logger.warning(f"Failed to initialize undetected_chromedriver: {e}. Fallback to standard Selenium.")
+        # Fallback to standard if UC fails (e.g. permission issues)
+        options_std = webdriver.ChromeOptions()
+        if CONFIG["scraping"].get("headless", True):
+            options_std.add_argument('--headless')
+        options_std.add_argument('--disable-gpu')
+        options_std.add_argument('--no-sandbox')
+        options_std.add_argument('--disable-dev-shm-usage')
+        
+        service = ChromeService(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options_std)
         
     return driver
 

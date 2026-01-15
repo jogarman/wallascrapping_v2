@@ -1,0 +1,245 @@
+"""
+Este script realiza la primera fase del scraping de Wallapop (Step 1).
+
+Funcionalidades principales:
+1.  **Navegación**: Abre el navegador y busca artículos basándose en los parámetros de `config.json`.
+2.  **Scroll Infinito**: Realiza scrolls iniciales, detecta y pulsa el botón "Cargar más" (incluso dentro de Shadow DOM), y continúa haciendo scroll.
+3.  **Extracción**: Recopila información básica de los artículos (título, precio, ID, URL).
+4.  **Guardado**: Almacena los datos crudos en un archivo CSV en la carpeta `data/step1/`.
+"""
+import logging
+import time
+import pandas as pd
+from datetime import datetime
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from .config import CONFIG, DATA_DIR
+from .utils import get_coords
+
+logger = logging.getLogger(__name__)
+
+def setup_driver():
+    options = webdriver.ChromeOptions()
+    if CONFIG["scraping"].get("headless", True):
+        options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    
+    # Try to install driver, fallback to default if fails (Github Actions usually needs specific setup)
+    try:
+        service = ChromeService(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+    except Exception as e:
+        logger.warning(f"Failed to install driver with manager: {e}. Trying default Selenium driver.")
+        driver = webdriver.Chrome(options=options)
+        
+    return driver
+
+def build_url(item_config):
+    name = item_config["name"]
+    filters = item_config["filters"]
+    
+    # Use simple replacement to handle any number of words, robustly
+    keywords = name.replace(" ", "%20")
+    
+    # Hardcoded coordinates for Madrid as requested
+    # longitude=-3.69196&latitude=40.41956
+    
+    # Handle distance: config has "10000" (likely meters). 
+    # User snippet had distance + '000' (implying km input).
+    # We will use the config value directly if it seems to be meters, 
+    # or append 000 if it looks like km (small integer).
+    raw_dist = str(filters.get("distancia", "10000"))
+    if raw_dist.isdigit() and int(raw_dist) < 100:
+        dist = raw_dist + "000"
+    else:
+        dist = raw_dist
+
+    # Base URL
+    url = f"https://es.wallapop.com/app/search?filters_source=quick_filters&keywords={keywords}&longitude=-3.69196&latitude=40.41956&distance={dist}"
+
+
+    
+    # Handle Conditions (Multiple states)
+    conditions_dict = filters.get("conditions")
+    if conditions_dict and isinstance(conditions_dict, dict):
+        active_conditions = [k for k, v in conditions_dict.items() if v]
+        if active_conditions:
+            joined_conditions = "%2C".join(active_conditions)
+            url += f"&condition={joined_conditions}"
+    
+    # Legacy: Fallback to simple 'estado' if 'conditions' not present
+    elif filters.get("estado") and filters.get("estado").lower() != "all":
+         estado = filters.get("estado")
+         url += f"&condition={estado}"
+         
+    return url
+
+def scrape_item(driver, item_config):
+    url = build_url(item_config)
+    logger.info(f"Navigating to: {url}")
+    driver.get(url)
+    
+    # Cookie/Privacy Banner
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "onetrust-reject-all-handler"))
+        ).click()
+        logger.info("Cookies rejected.")
+    except Exception:
+         logger.info("No cookie banner found or already handled.")
+
+    driver.maximize_window()
+    
+    # Initial scroll to trigger button appearance (as per src_old logic)
+    logger.info("Performing initial scroll (5 times)...")
+    for i in range(3):
+       driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+       time.sleep(0.5)
+            
+    # Load More Button
+    # Logic from src_old: Click "Load More" using specific XPath
+    try:
+        print("Buscando botón 'Cargar más' usando JS (buscando en Shadow DOM)...")
+        # Script to find the button even inside Shadow DOM
+        script = """
+        return (function() {
+            const candidates = document.querySelectorAll('walla-button');
+            for (const host of candidates) {
+                // Check if host has text
+                if (host.innerText && (host.innerText.toLowerCase().includes('cargar más') || host.innerText.toLowerCase().includes('ver más') || host.innerText.toLowerCase().includes('load'))) {
+                    return host;
+                }
+                // Check Shadow DOM
+                if (host.shadowRoot) {
+                    const innerBtn = host.shadowRoot.querySelector('button');
+                    if (innerBtn) {
+                         const txt = innerBtn.innerText || innerBtn.textContent;
+                         if (txt && (txt.toLowerCase().includes('cargar') || txt.toLowerCase().includes('ver más') || txt.toLowerCase().includes('load'))) {
+                             return innerBtn;
+                         }
+                    }
+                }
+            }
+            return null;
+        })();
+        """
+        boton_ver_mas = driver.execute_script(script)
+
+        if boton_ver_mas:
+            print(f"Botón encontrado: {boton_ver_mas.tag_name}")
+            driver.execute_script("arguments[0].scrollIntoView(true);", boton_ver_mas)
+            time.sleep(1)
+            try:
+                boton_ver_mas.click()
+            except:
+                driver.execute_script("arguments[0].click();", boton_ver_mas)
+            logger.info("Clicked 'Load More'")
+        else:
+             print("Botón no encontrado ni siquiera con JS + Shadow DOM search.")
+             # Dump page source snippet for debug if allowed (optional, keeping it simple for now)
+             raise Exception("Botón no encontrado")
+
+    except Exception as e:
+        logger.error(f"CRITICO: Boton ver mas no encontrado o error al clicar. Deteniendo ejecución. Error: {e}")
+        driver.quit()
+        raise e
+    time.sleep(2)
+
+    # Main Scroll Loop
+    # Logic from src_old: Scroll 25 times (configurable)
+    n_scrolls_cada_vez = CONFIG["scraping"].get("scrolls", 25)
+    n = 0
+    logger.info(f"Starting main scrolling ({n_scrolls_cada_vez} times)...")
+    try:
+        while n < n_scrolls_cada_vez:
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(1)
+            n += 1
+            print(f"scroll {n}")
+    except Exception as e:
+        print(f"Ocurrió un error: {e}")
+
+    # Parse key elements
+    # Parse key elements
+    # New selector based on browser inspection: a[class*="item-card_ItemCard"]
+    items = driver.find_elements(By.CSS_SELECTOR, "a[class*='item-card_ItemCard']")
+    logger.info(f"Found {len(items)} items in the DOM.")
+    
+    if len(items) == 0:
+        screenshot_path = "error_screenshot.png"
+        driver.save_screenshot(screenshot_path)
+        logger.error(f"No items found! Screenshot saved to {screenshot_path}")
+        logger.info(f"Current URL: {driver.current_url}")
+        
+    data = []
+    
+    for item in items:
+        try:
+            link = item.get_attribute('href')
+            
+            # Title selector: h3[class*="item-card_ItemCard__title"]
+            # We try to find it within the item element
+            try:
+                title_elem = item.find_element(By.CSS_SELECTOR, "h3[class*='item-card_ItemCard__title']")
+                title = title_elem.text.strip()
+            except:
+                title = item.get_attribute('title') or "No Title"
+
+            # Price selector: strong[class*="item-card_ItemCard__price"]
+            try:
+                price_elem = item.find_element(By.CSS_SELECTOR, "strong[class*='item-card_ItemCard__price']")
+                price = price_elem.text.strip()
+            except:
+                price = "0"
+            
+            item_id = link.split('-')[-1]
+            
+            data.append({
+                "id": item_id,
+                "time_scrap": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "nombre": title,
+                "precio": price,
+                "url_articulo": link,
+                "municipio": item_config["filters"].get("municipio"),
+                "search_term": item_config["name"]
+            })
+        except Exception as e:
+            logger.debug(f"Error parsing item: {e}")
+            continue
+            
+    return pd.DataFrame(data)
+
+def run_scraper():
+    driver = setup_driver()
+    try:
+        all_dfs = []
+        for item in CONFIG["search_items"]:
+            logger.info(f"Scraping item: {item['name']}")
+            df = scrape_item(driver, item)
+            all_dfs.append(df)
+            
+        if all_dfs:
+            final_df = pd.concat(all_dfs, ignore_index=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+            output_path = DATA_DIR / "step1" / f"raw_{timestamp}.csv"
+            
+            # Ensure folder exists
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            final_df.to_csv(output_path, index=False)
+            logger.info(f"Scraping finished. Saved {len(final_df)} items to {output_path}")
+        else:
+            logger.warning("No data scraped.")
+            
+    finally:
+        driver.quit()
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    run_scraper()

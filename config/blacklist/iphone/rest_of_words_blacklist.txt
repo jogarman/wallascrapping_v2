@@ -1,0 +1,17 @@
+pieza
+piezas
+repuesto
+repuestos
+despiece
+cambio
+compro
+busco
+demanda
+compramos
+bloqueado
+icloud
+roto
+rota
+averiado
+clon
+replica

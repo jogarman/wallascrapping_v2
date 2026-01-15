@@ -1,0 +1,18 @@
+[project]
+name = "wallascrap-v2"
+version = "0.1.0"
+description = "Wallapop Scraper V2"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "selenium",
+    "webdriver-manager",
+    "pandas",
+    "python-dotenv",
+    "google-generativeai",
+    "beautifulsoup4",
+    "requests"
+]
+
+[tool.uv]
+# UV specific settings if needed

@@ -1,0 +1,66 @@
+{
+    "search_items": [
+        {
+            "name": "iphone 15",
+            "filters": {
+                "municipio": "Madrid",
+                "conditions": {
+                    "un_opened": true,
+                    "in_box": true,
+                    "new": true,
+                    "as_good_as_new": true,
+                    "good": false,
+                    "fair": false,
+                    "has_given_it_all": false
+                },
+                "distancia": "50",
+                "precio_min": 300
+            },
+            "blacklist_dir": "config/blacklist/iphone"
+        },
+        {
+            "name": "iphone 16",
+            "filters": {
+                "municipio": "Madrid",
+                "conditions": {
+                    "un_opened": true,
+                    "in_box": true,
+                    "new": true,
+                    "as_good_as_new": true,
+                    "good": false,
+                    "fair": false,
+                    "has_given_it_all": false
+                },
+                "distancia": "50",
+                "precio_min": 325
+            },
+            "blacklist_dir": "config/blacklist/iphone"
+        },
+        {
+            "name": "iphone 17",
+            "filters": {
+                "municipio": "Madrid",
+                "conditions": {
+                    "un_opened": true,
+                    "in_box": true,
+                    "new": true,
+                    "as_good_as_new": true,
+                    "good": false,
+                    "fair": false,
+                    "has_given_it_all": false
+                },
+                "distancia": "50",
+                "precio_min": 350
+            },
+            "blacklist_dir": "config/blacklist/iphone"
+        }
+    ],
+    "scraping": {
+        "scrolls": 25,
+        "headless": true
+    },
+    "paths": {
+        "data_dir": "data",
+        "chrome_driver_path": ""
+    }
+}

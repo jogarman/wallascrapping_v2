@@ -1,0 +1,57 @@
+Proyecto para escrapear iphones de wallapop empleando github actions.
+
+1- infraestructura
+Se empleará github actions. Se empleará crone para marcar cuando ejecutar el script.
+Programa en python
+orquestador: uv
+
+2- Control. 
+Una aplicación que permita al usuario introducir los parámetros que serán escrapeados regularmente. Será simplemente un json.
+Cada escrapeo no será solo un articulo, sino varios.
+Registrará errores en un log. Cuando haya un error reintenta 3 veces. Si falla reintenta todo el bloque, maximo 3 veces.
+El código debe estar a prueba de errores.
+
+3- Esructura del programa
+Estará en src. Se basará en src_old. src_ol no llegó a funcionar por estár basado en Windows, todo lo que se haga debe ser compatible con Linux.
+El programa se ejcutara en Ubuntu.
+Se empleara un entorno virtual.
+Se emplearan variables de entorno y de configuración.
+Se empleara github para control de versiones.
+Se empleara github actions para la ejecución del script.
+El nombre de los csv y de las carpetas deben ser descriptivos y tomarse de variables de entorno.
+/data deberá ser una carpeta. Dentro, deberá haber una carpeta con cada paso que ejecute el script. 
+Los jupiters, csvs y json deberán empezar por su numero de ejecución, como en src_old.
+
+4- Ejecución del programa
+Se abre la pagina principal de wallapop con los filtros de búsqueda.
+Debe haber un orquestador que gestione los posibles errores que puedan ocurrir durante los siguientes pasos.
+El proceso es pesado, se debe tener en cuenta que 
+Cada paso debe ser un .py
+Se cargan todos los articulos. Es posible hacer scroll de forma infinita, por lo que se hará scroll n veces.
+Se descarga la web.
+Se carga la web. Se listan todos los id de los articulos. Se compara el id con el csv general de articulos. Ese csv deberá tener registrados
+todos los id de articulos que en algun momento se han escrapeado. Es una tabla qué indica en qué paso se ha dejado de escrapear.
+Al terminar de listar los id, se filtran aquellos que ya existían en este csv general de articulos. 
+    Este csv debera tener una fila por id de articulo y una columna con al menos: id, t_first_scrap, t_last_scrap, filter_1, filter_2, ia_processed
+Se guardan, todos los resultados en un csv:
+    'id', 'time_scrap', 'nombre', 'precio', 'estado', 'reservado',
+    'municipio', 'distancia', 'url_articulo'
+Se elimina la web descargada
+Se abre ell csv y se procesa
+Se eliminan los articulos que no cumplen con ciertas condiciones. Fijarse en src_old/01_wallascrap.py. La blacklist y whitelist deben ser archivos aparte
+Se guardan los articulos filtrados en un nuevo csv.
+Se abre el csv filtrado y se captan con una llamada a la api de gemini nuevos datos de cada articulo del texto: time_scrapped, generación, modelo, memoria, estado de la batería y precio
+    'id', 'time_scrap', 'gen', 'mod', 'memoria', 'bateria','precio', 'estado',
+    'nombre','tiene_color', 'tiene_emojis', 'tiene_revisado', 'municipio',
+    'distancia', 'reservado', 'url_articulo',  'fecha'
+Se guarda el csv.
+Se abre el csv. Se filtran los articulos que no tienen 'gen', 'mod', 'memoria' o 'bateria'
+Se hace una request a la web y se pasa el texto a la api de gemini para completar los datos de cada articulo, si no lo encuentra se deja vacio
+Como son los articulos finales se guarda en json.
+
+4- Interaccionar por telegram. 
+Cambiar el crone
+Cambiar el archivo de configuración con lo que hay que escrapear
+Ver los resultados
+Ver los logs
+Recibir notificaciones cuando se activen alarmas. Las alarmas serán relativas a cierto articulo por debajo de X precio.

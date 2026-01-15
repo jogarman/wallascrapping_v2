@@ -45,3 +45,14 @@ jobs:
           git add data/ scrapping_outputs/
           git commit -m "Auto-scraping results [$(date)]" || echo "No changes to commit"
           git push
+
+      - name: Upload Logs and Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-artifacts
+          path: |
+            scrapping_outputs/
+            error_screenshot.png
+            *.png
+            *.log

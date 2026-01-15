@@ -54,13 +54,5 @@
             },
             "blacklist_dir": "config/blacklist/iphone"
         }
-    ],
-    "scraping": {
-        "scrolls": 25,
-        "headless": true
-    },
-    "paths": {
-        "data_dir": "data",
-        "chrome_driver_path": ""
-    }
+    ]
 }

@@ -171,11 +171,13 @@ def scrape_item(driver, item_config):
         try:
             boton_ver_mas = driver.execute_script(script)
             if boton_ver_mas:
-                print("Botón cargar más encontrado")
-                logger.info(f"Botón 'cargar más' encontrado en intento {i+1} '{'boton_ver_mas.tag_name'}'--> {boton_ver_mas.tag_name}")
+                # Capture identifiers for future reference
+                btn_id = boton_ver_mas.get_attribute("id")
+                btn_class = boton_ver_mas.get_attribute("class")
+                logger.info(f"Identificadores del botón para futuro uso: ID='{btn_id}', Class='{btn_class}'")
                 
                 driver.execute_script("arguments[0].scrollIntoView(true);", boton_ver_mas)
-                time.sleep(1)
+                time.sleep(0.5)
                 try:
                     boton_ver_mas.click()
                 except:
@@ -192,7 +194,6 @@ def scrape_item(driver, item_config):
          raise Exception("Botón no encontrado")
          
     time.sleep(0.5)
-
     # Main Scroll Loop
     # Logic from src_old: Scroll 25 times (configurable)
     n_scrolls_cada_vez = CONFIG["scraping"].get("scrolls", 25)

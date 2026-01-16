@@ -238,6 +238,16 @@ def scrape_item(driver, item_config):
         # 2. Search & Click cargar más
         try:
             boton_ver_mas = driver.execute_script(script)
+            
+            # Fallback: XPath provided by user
+            if not boton_ver_mas:
+                try:
+                    xpath_selector = '//*[@id="__next"]/main/div/div/div/div[2]/section/div[3]/button'
+                    boton_ver_mas = driver.find_element(By.XPATH, xpath_selector)
+                    logger.info("Botón encontrado mediante XPath fallback.")
+                except:
+                    pass # Keep None if not found
+
             if boton_ver_mas:
                 # Capture identifiers for future reference
                 btn_id = boton_ver_mas.get_attribute("id")

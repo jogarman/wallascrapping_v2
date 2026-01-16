@@ -113,6 +113,18 @@ def scrape_item(driver, item_config):
     url = build_url(item_config)
     logger.info(f"Navigating to: {url}")
     driver.get(url)
+
+    # DEBUG: Save HTML execution
+    try:
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        debug_html_path = DATA_DIR / f"web-{timestamp_str}.html"
+        # Ensure directory exists (DATA_DIR should exist, but just in case)
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        with open(debug_html_path, "w", encoding="utf-8") as f:
+            f.write(driver.page_source)
+        logger.info(f"DEBUG: Page source saved to {debug_html_path}")
+    except Exception as e:
+        logger.error(f"Failed to save debug HTML: {e}")
     
     # Cookie/Privacy Banner
     try:

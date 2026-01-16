@@ -1,0 +1,13 @@
+{
+    "actorSpecification": 1,
+    "name": "wallapop-scraper-v2",
+    "title": "Wallapop Scraper V2",
+    "description": "Scrapes Wallapop (Step 1) and filters results (Step 2).",
+    "version": "0.1",
+    "meta": {
+        "templateId": "python-selenium"
+    },
+    "input": "./input_schema.json",
+    "dockerfile": "./Dockerfile",
+    "buildTag": "latest"
+}

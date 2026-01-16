@@ -1,7 +1,7 @@
 {
     "scraping": {
-        "scrolls": 25,
-        "headless": true
+        "scrolls": 5,
+        "headless": false
     },
     "paths": {
         "data_dir": "data",

@@ -1,0 +1,10 @@
+selenium
+webdriver-manager
+pandas
+python-dotenv
+google-generativeai
+beautifulsoup4
+requests
+undetected-chromedriver
+fake-useragent>=2.2.0
+apify-client

@@ -1,0 +1,29 @@
+{
+    "title": "Wallapop Scraper Input",
+    "type": "object",
+    "schema": {
+        "properties": {
+            "search_term": {
+                "title": "Search Term",
+                "type": "string",
+                "description": "Product to search for (e.g., 'iphone 16')",
+                "default": "iphone 16"
+            },
+            "headless": {
+                "title": "Headless Mode",
+                "type": "boolean",
+                "description": "Run browser in headless mode",
+                "default": true
+            },
+            "scrolls": {
+                "title": "Max Scrolls",
+                "type": "integer",
+                "description": "Number of times to scroll down",
+                "default": 5
+            }
+        },
+        "required": [
+            "search_term"
+        ]
+    }
+}

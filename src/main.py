@@ -46,10 +46,64 @@ from .step4_enrich_gemini_basic import run_gemini_enrichment
 from .step5_finalize import run_finalization
 from .notifier import notify_completion, notify_error
 
+import os
+try:
+    from apify_client import ApifyClient
+except ImportError:
+    ApifyClient = None
+
 def main():
     parser = argparse.ArgumentParser(description="Wallascrap V2 Orchestrator")
     parser.add_argument("--pipeline", type=str, default="full", help="Pipeline to run: full, custom")
     args = parser.parse_args()
+
+    # Apify Input Integration
+    if os.getenv("APIFY_IS_AT_HOME"):
+        logger.info("Running in Apify environment...")
+        try:
+            client = ApifyClient()
+            # In local dev (not strictly on platform), default_key_value_store_client might need setup
+            # But usually we just read INPUT.json manually or rely on env vars if pushed to platform
+            # Simpler approach: Check for Actor Input
+            # For this MVP, we will just proceed. Real integration would read the Key-Value store.
+            pass
+        except Exception as e:
+            logger.warning(f"Apify setup warning: {e}")
+            
+    # Load config overrides from Env Vars (common pattern for Docker/Apify)
+    if os.getenv("SEARCH_TERM"):
+        search_term = os.getenv("SEARCH_TERM")
+        logger.info(f"Overriding search term from Env Var: {search_term}")
+        
+        # Override the search_items list with a single item based on the env var
+        CONFIG["search_items"] = [{
+            "name": search_term,
+            "filters": {
+                # Default filters for dynamic input or read from other env vars if needed
+                "min_price": None,
+                "max_price": None,
+                "estado": "all",
+                "distancia": "50000", # Default 50km
+                "municipio": None,
+                "latitude": 40.41956, 
+                "longitude": -3.69196,
+                "conditions": {"new": True, "as_good_as_new": True, "good": True, "fair": True, "has_given_much": True}
+            }
+        }]
+
+    if os.getenv("HEADLESS"):
+        is_headless = os.getenv("HEADLESS", "true").lower() == "true"
+        CONFIG["scraping"]["headless"] = is_headless
+        logger.info(f"Overriding headless mode from Env Var: {is_headless}")
+        
+    if os.getenv("SCROLLS"):
+        try:
+            scrolls = int(os.getenv("SCROLLS"))
+            CONFIG["scraping"]["scrolls"] = scrolls
+            logger.info(f"Overriding scrolls from Env Var: {scrolls}")
+        except ValueError:
+            logger.warning("Invalid SCROLLS env var, ignoring.")
+
 
     logger.info(f"Initialization complete. Config loaded. Log file: {log_file}")
     

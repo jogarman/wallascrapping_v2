@@ -87,14 +87,13 @@ def setup_driver():
     except Exception as e:
         logger.warning(f"Could not load fake-useragent: {e}. using default.")
 
-    if CONFIG["scraping"].get("headless", True):
-        # UC expects this for headless
-        options.add_argument('--headless=new') 
-        
-    options.add_argument('--disable-gpu')
-    options.add_argument('--no-sandbox')
+    # More anti-detection measures
+    options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_argument('--disable-dev-shm-usage')
-             
+    options.add_argument('--no-first-run')
+    options.add_argument('--no-default-browser-check')
+    options.add_argument('--disable-popup-blocking')
+    
     # Referer Spoofing (Try to look like we come from Google)
     options.add_argument('--referrer=https://www.google.com/')
     
@@ -103,8 +102,13 @@ def setup_driver():
     selected_size = random.choice(window_sizes)
     logger.info(f"Using Random Window Size: {selected_size}")
     options.add_argument(f'--window-size={selected_size}')
-    
-    # Enable shadow-root (UC handles this well, but just in case)
+
+    if CONFIG["scraping"].get("headless", True):
+        # UC expects this for headless
+        options.add_argument('--headless=new') 
+    else:
+        # If not headless, disable gpu can cause issues
+        pass
     
     tc_driver_use = True
     if os.getenv("USE_STD_DRIVER", "false").lower() == "true":
@@ -115,7 +119,12 @@ def setup_driver():
         try:
             # uc automatically handles driver download and patching
             # version_main allows pinning major version if needed, but usually auto is best
-            driver = uc.Chrome(options=options)
+            # use_subprocess=True can help with stability
+            driver = uc.Chrome(options=options, use_subprocess=True, version_main=None)
+            
+            # Give the driver a moment to stabilize before returning
+            time.sleep(2)
+            logger.info("Driver initialized successfully")
             return driver
         except Exception as e:
             logger.warning(f"Failed to initialize undetected_chromedriver: {e}. Fallback to standard Selenium.")
@@ -198,32 +207,40 @@ def scrape_item(driver, item_config):
     logger.info("Iniciando ciclo de búsqueda del botón 'Cargar más' (10 intentos)...")
 
     # Script to find the button even inside Shadow DOM
-    # Script to find the button even inside Shadow DOM
+    # Improved script to avoid clicking the wrong button (upload/login)
     script = """
     return (function() {
+        // Search ONLY within the search results container to avoid other buttons
+        const searchContainer = document.querySelector('main') || document.body;
+        
         // Target class from logs
         const targetClass = 'walla-button__button walla-button__button--medium walla-button__button--primary';
         
-        const candidates = document.querySelectorAll('walla-button');
+        const candidates = searchContainer.querySelectorAll('walla-button');
         for (const host of candidates) {
-            // Priority 1: Check host text
-            if (host.innerText && (host.innerText.toLowerCase().includes('cargar más') || host.innerText.toLowerCase().includes('ver más') || host.innerText.toLowerCase().includes('load'))) {
-                return host;
+            // SKIP buttons that are part of navigation/header/upload areas
+            const parent = host.closest('[role="banner"], nav, header, [class*="upload"], [class*="nav"]');
+            if (parent) continue;
+            
+            // Priority 1: Check host text for "Cargar más" / "Load more" ONLY
+            if (host.innerText) {
+                const text = host.innerText.toLowerCase();
+                if (text.includes('cargar más') || text.includes('ver más artículos') || text.includes('load more')) {
+                    console.log('Found button by host text:', host.innerText);
+                    return host;
+                }
             }
             
             // Check in Shadow DOM
             if (host.shadowRoot) {
-                // Priority 2: Check by specific Class inside Shadow DOM
-                const classBtn = host.shadowRoot.querySelector(`button[class='${targetClass}']`);
-                if (classBtn) return classBtn;
-
-                // Priority 3: Check by text inside Shadow DOM (fallback)
                 const innerBtn = host.shadowRoot.querySelector('button');
                 if (innerBtn) {
-                        const txt = innerBtn.innerText || innerBtn.textContent;
-                        if (txt && (txt.toLowerCase().includes('cargar') || txt.toLowerCase().includes('ver más') || txt.toLowerCase().includes('load'))) {
-                            return innerBtn;
-                        }
+                    const txt = (innerBtn.innerText || innerBtn.textContent || '').toLowerCase();
+                    // Be very specific: only "cargar más" or "ver más artículos", NOT just "ver" or "cargar"
+                    if (txt === 'cargar más' || txt === 'ver más artículos' || txt === 'load more' || txt === 'see more') {
+                        console.log('Found button in shadow DOM:', txt);
+                        return innerBtn;
+                    }
                 }
             }
         }
@@ -239,13 +256,36 @@ def scrape_item(driver, item_config):
         try:
             boton_ver_mas = driver.execute_script(script)
             
-            # Fallback: XPath provided by user
+            # Fallback: XPath provided by user with detailed logging
             if not boton_ver_mas:
                 try:
                     xpath_selector = '//*[@id="__next"]/main/div/div/div/div[2]/section/div[3]/button'
-                    boton_ver_mas = driver.find_element(By.XPATH, xpath_selector)
-                    logger.info("Botón encontrado mediante XPath fallback.")
-                except:
+                    # Use JavaScript to get detailed info about the element
+                    element_info = driver.execute_script("""
+                        const xpath = arguments[0];
+                        const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                        const element = result.singleNodeValue;
+                        
+                        if (element) {
+                            return {
+                                found: true,
+                                tagName: element.tagName,
+                                id: element.id,
+                                className: element.className,
+                                innerText: element.innerText || element.textContent || ''
+                            };
+                        }
+                        return {found: false};
+                    """, xpath_selector)
+                    
+                    if element_info and element_info.get('found'):
+                        logger.info(f"XPath fallback - Elemento encontrado: Tag={element_info.get('tagName')}, ID='{element_info.get('id')}', Class='{element_info.get('className')}', Text='{element_info.get('innerText')}'")
+                        boton_ver_mas = driver.find_element(By.XPATH, xpath_selector)
+                        logger.info("Botón encontrado mediante XPath fallback.")
+                    else:
+                        logger.warning("XPath fallback no encontró ningún elemento.")
+                except Exception as e:
+                    logger.warning(f"Error en XPath fallback: {e}")
                     pass # Keep None if not found
 
             if boton_ver_mas:

@@ -12,6 +12,7 @@ import time
 import pandas as pd
 import setuptools # Required to patch distutils
 import distutils
+import os
 from datetime import datetime
 
 from selenium import webdriver
@@ -41,22 +42,30 @@ def setup_driver():
     
     # Enable shadow-root (UC handles this well, but just in case)
     
-    try:
-        # uc automatically handles driver download and patching
-        # version_main allows pinning major version if needed, but usually auto is best
-        driver = uc.Chrome(options=options)
-    except Exception as e:
-        logger.warning(f"Failed to initialize undetected_chromedriver: {e}. Fallback to standard Selenium.")
-        # Fallback to standard if UC fails (e.g. permission issues)
-        options_std = webdriver.ChromeOptions()
-        if CONFIG["scraping"].get("headless", True):
-            options_std.add_argument('--headless')
-        options_std.add_argument('--disable-gpu')
-        options_std.add_argument('--no-sandbox')
-        options_std.add_argument('--disable-dev-shm-usage')
-        
-        service = ChromeService(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options_std)
+    tc_driver_use = True
+    if os.getenv("USE_STD_DRIVER", "false").lower() == "true":
+        logger.info("Forcing standard Selenium driver (USE_STD_DRIVER=true)...")
+        tc_driver_use = False
+
+    if tc_driver_use:
+        try:
+            # uc automatically handles driver download and patching
+            # version_main allows pinning major version if needed, but usually auto is best
+            driver = uc.Chrome(options=options)
+            return driver
+        except Exception as e:
+            logger.warning(f"Failed to initialize undetected_chromedriver: {e}. Fallback to standard Selenium.")
+    
+    # Fallback to standard or forced standard
+    options_std = webdriver.ChromeOptions()
+    if CONFIG["scraping"].get("headless", True):
+        options_std.add_argument('--headless')
+    options_std.add_argument('--disable-gpu')
+    options_std.add_argument('--no-sandbox')
+    options_std.add_argument('--disable-dev-shm-usage')
+    
+    service = ChromeService(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options_std)
         
     return driver
 
@@ -116,63 +125,61 @@ def scrape_item(driver, item_config):
 
     driver.maximize_window()
     
-    # Initial scroll to trigger button appearance (as per src_old logic)
-    logger.info("Performing initial scroll (5 times)...")
-    for i in range(3):
-       driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-       time.sleep(0.5)
-            
-    # Load More Button
-    # Logic from src_old: Click "Load More" using specific XPath
-    try:
-        print("Buscando botón 'Cargar más' usando JS (buscando en Shadow DOM)...")
-        # Script to find the button even inside Shadow DOM
-        script = """
-        return (function() {
-            const candidates = document.querySelectorAll('walla-button');
-            for (const host of candidates) {
-                // Check if host has text
-                if (host.innerText && (host.innerText.toLowerCase().includes('cargar más') || host.innerText.toLowerCase().includes('ver más') || host.innerText.toLowerCase().includes('load'))) {
-                    return host;
-                }
-                // Check Shadow DOM
-                if (host.shadowRoot) {
-                    const innerBtn = host.shadowRoot.querySelector('button');
-                    if (innerBtn) {
-                         const txt = innerBtn.innerText || innerBtn.textContent;
-                         if (txt && (txt.toLowerCase().includes('cargar') || txt.toLowerCase().includes('ver más') || txt.toLowerCase().includes('load'))) {
-                             return innerBtn;
-                         }
-                    }
+    # Load More Button Strategy: Loop up to 10 times (Scroll -> Search -> Click)
+    button_found = False
+    logger.info("Iniciando ciclo de búsqueda del botón 'Cargar más' (10 intentos)...")
+
+    # Script to find the button even inside Shadow DOM
+    script = """
+    return (function() {
+        const candidates = document.querySelectorAll('walla-button');
+        for (const host of candidates) {
+            if (host.innerText && (host.innerText.toLowerCase().includes('cargar más') || host.innerText.toLowerCase().includes('ver más') || host.innerText.toLowerCase().includes('load'))) {
+                return host;
+            }
+            if (host.shadowRoot) {
+                const innerBtn = host.shadowRoot.querySelector('button');
+                if (innerBtn) {
+                        const txt = innerBtn.innerText || innerBtn.textContent;
+                        if (txt && (txt.toLowerCase().includes('cargar') || txt.toLowerCase().includes('ver más') || txt.toLowerCase().includes('load'))) {
+                            return innerBtn;
+                        }
                 }
             }
-            return null;
-        })();
-        """
-        boton_ver_mas = driver.execute_script(script)
+        }
+        return null;
+    })();
+    """
 
-        if boton_ver_mas:
-            print(f"Botón encontrado: {boton_ver_mas.tag_name}")
-            driver.execute_script("arguments[0].scrollIntoView(true);", boton_ver_mas)
-            time.sleep(1)
-            try:
-                boton_ver_mas.click()
-            except:
-                driver.execute_script("arguments[0].click();", boton_ver_mas)
-            logger.info("Clicked 'Load More'")
-        else:
-             print("Botón no encontrado ni siquiera con JS + Shadow DOM search.")
-             # Dump page source snippet for debug if allowed (optional, keeping it simple for now)
-             print("Botón no encontrado ni siquiera con JS + Shadow DOM search.")
-             # Dump page source snippet for debug if allowed (optional, keeping it simple for now)
-             raise Exception("Botón no encontrado")
+    for i in range(10):
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(0.5)
+        
+        # 2. Search & Click cargar más
+        try:
+            boton_ver_mas = driver.execute_script(script)
+            if boton_ver_mas:
+                print("Botón cargar más encontrado")
+                logger.info(f"Botón 'cargar más' encontrado en intento {i+1} '{'boton_ver_mas.tag_name'}'--> {boton_ver_mas.tag_name}")
+                
+                driver.execute_script("arguments[0].scrollIntoView(true);", boton_ver_mas)
+                time.sleep(1)
+                try:
+                    boton_ver_mas.click()
+                except:
+                    driver.execute_script("arguments[0].click();", boton_ver_mas)
+                
+                logger.info("Clicked 'Load More'")
+                button_found = True
+                break
+        except Exception as e:
+            logger.warning(f"Excepción puntual buscando botón (intento {i+1}): {e}")
 
-
-    except Exception as e:
-        logger.error(f"CRITICO: Boton ver mas no encontrado o error al clicar. Deteniendo ejecución. Error: {e}")
-        driver.quit()
-        raise e
-    time.sleep(2)
+    if not button_found:
+         logger.error("Botón no encontrado tras 10 intentos (Scroll + Search).")
+         raise Exception("Botón no encontrado")
+         
+    time.sleep(0.5)
 
     # Main Scroll Loop
     # Logic from src_old: Scroll 25 times (configurable)
@@ -186,11 +193,9 @@ def scrape_item(driver, item_config):
             n += 1
             print(f"scroll {n}")
     except Exception as e:
-        print(f"Ocurrió un error: {e}")
+        logger.error(f"Ocurrió un error durante el scroll principal: {e}")
 
     # Parse key elements
-    # Parse key elements
-    # New selector based on browser inspection: a[class*="item-card_ItemCard"]
     items = driver.find_elements(By.CSS_SELECTOR, "a[class*='item-card_ItemCard']")
     logger.info(f"Found {len(items)} items in the DOM.")
     
@@ -199,6 +204,7 @@ def scrape_item(driver, item_config):
         driver.save_screenshot(screenshot_path)
         logger.error(f"No items found! Screenshot saved to {screenshot_path}")
         logger.info(f"Current URL: {driver.current_url}")
+        raise Exception("Scraping failed: No items found in DOM.")
         
     data = []
     
@@ -244,8 +250,26 @@ def run_scraper():
         all_dfs = []
         for item in CONFIG["search_items"]:
             logger.info(f"Scraping item: {item['name']}")
-            df = scrape_item(driver, item)
-            all_dfs.append(df)
+            
+            # Retry logic: Try up to 2 times (Initial + 1 Retry)
+            max_retries = 1
+            for attempt in range(max_retries + 1):
+                try:
+                    df = scrape_item(driver, item)
+                    all_dfs.append(df)
+                    break # Success, exit retry loop
+                except Exception as e:
+                    logger.warning(f"Error scraping {item['name']} (Attempt {attempt+1}/{max_retries+1}): {e}")
+                    if attempt < max_retries:
+                        logger.info("Retrying...")
+                        time.sleep(3) # Wait a bit before retry
+                    else:
+                        logger.error(f"Max retries reached for {item['name']}. Skipping.")
+                        # Optionally raise if we want the WHOLE pipeline to fail if one item fails, 
+                        # but usually skipping failed item is better if others succeeded. 
+                        # User said "Si no, si que despliegue el error". 
+                        # Let's re-raise to fail the pipeline as per earlier fail-fast instruction.
+                        raise e
             
         if all_dfs:
             final_df = pd.concat(all_dfs, ignore_index=True)

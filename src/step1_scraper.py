@@ -32,17 +32,26 @@ logger = logging.getLogger(__name__)
 import undetected_chromedriver as uc
 
 def save_debug_html(driver, prefix="error"):
-    """Saves the current page source to a file for debugging."""
+    """Saves the current page source and screenshot to files for debugging."""
     try:
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Save HTML
         debug_html_path = DATA_DIR / f"{prefix}-{timestamp_str}.html"
-        # Ensure directory exists
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         with open(debug_html_path, "w", encoding="utf-8") as f:
             f.write(driver.page_source)
-        logger.info(f"DEBUG: Page source saved to {debug_html_path}")
+            
+        # Save Screenshot
+        debug_png_path = DATA_DIR / f"{prefix}-{timestamp_str}.png"
+        driver.save_screenshot(str(debug_png_path))
+        
+        # Also overwrite the 'latest' error screenshot for easy access
+        driver.save_screenshot("error_screenshot.png")
+        
+        logger.info(f"DEBUG: Saved HTML to {debug_html_path} and Screenshot to {debug_png_path}")
     except Exception as e:
-        logger.error(f"Failed to save debug HTML: {e}")
+        logger.error(f"Failed to save debug artifacts: {e}")
 
 def check_for_block(driver):
     """Checks if the page is blocked by CloudFront or other anti-bot protections."""
@@ -277,12 +286,9 @@ def scrape_item(driver, item_config):
     logger.info(f"Found {len(items)} items in the DOM.")
     
     if len(items) == 0:
-        screenshot_path = "error_screenshot.png"
-        driver.save_screenshot(screenshot_path)
-        logger.error(f"No items found! Screenshot saved to {screenshot_path}")
         logger.info(f"Current URL: {driver.current_url}")
         
-        # Save HTML for debug
+        # Save HTML & Screenshot for debug
         save_debug_html(driver, prefix="error_no_items")
         
         raise Exception("Scraping failed: No items found in DOM.")
@@ -332,25 +338,13 @@ def run_scraper():
         for item in CONFIG["search_items"]:
             logger.info(f"Scraping item: {item['name']}")
             
-            # Retry logic: Try up to 2 times (Initial + 1 Retry)
-            max_retries = 1
-            for attempt in range(max_retries + 1):
-                try:
-                    df = scrape_item(driver, item)
-                    all_dfs.append(df)
-                    break # Success, exit retry loop
-                except Exception as e:
-                    logger.warning(f"Error scraping {item['name']} (Attempt {attempt+1}/{max_retries+1}): {e}")
-                    if attempt < max_retries:
-                        logger.info("Retrying...")
-                        time.sleep(3) # Wait a bit before retry
-                    else:
-                        logger.error(f"Max retries reached for {item['name']}. Skipping.")
-                        # Optionally raise if we want the WHOLE pipeline to fail if one item fails, 
-                        # but usually skipping failed item is better if others succeeded. 
-                        # User said "Si no, si que despliegue el error". 
-                        # Let's re-raise to fail the pipeline as per earlier fail-fast instruction.
-                        raise e
+            # No Retry logic: Fail fast as requested
+            try:
+                df = scrape_item(driver, item)
+                all_dfs.append(df)
+            except Exception as e:
+                logger.error(f"Error scraping {item['name']}: {e}")
+                raise e
             
         if all_dfs:
             final_df = pd.concat(all_dfs, ignore_index=True)

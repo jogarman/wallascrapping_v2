@@ -55,3 +55,5 @@ jobs:
             error_screenshot.png
             *.png
             *.log
+            data/error_*.html
+            data/web-*.html

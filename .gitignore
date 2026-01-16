@@ -40,3 +40,8 @@ geckodriver
 # IDE
 .vscode/
 .idea/
+
+# No quiero que se suban los archivos
+.csv
+.html
+.DS_Store

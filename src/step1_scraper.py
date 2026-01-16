@@ -44,6 +44,23 @@ def save_debug_html(driver, prefix="error"):
     except Exception as e:
         logger.error(f"Failed to save debug HTML: {e}")
 
+def check_for_block(driver):
+    """Checks if the page is blocked by CloudFront or other anti-bot protections."""
+    try:
+        title = driver.title
+        page_source = driver.page_source
+        
+        if "ERROR" in title or "The request could not be satisfied" in title or "Request blocked" in page_source:
+             logger.critical("🚨 BLOCK DETECTED: CloudFront/Filter detected our request! 🚨")
+             logger.critical(f"Title: {title}")
+             save_debug_html(driver, prefix="blocked")
+             return True
+             
+        return False
+    except Exception as e:
+        logger.error(f"Error checking for block: {e}")
+        return False
+
 def random_sleep(min_seconds=0.5, max_seconds=2.0):
     """Sleeps for a random amount of time to simulate human behavior."""
     sleep_time = random.uniform(min_seconds, max_seconds)
@@ -68,6 +85,9 @@ def setup_driver():
     options.add_argument('--disable-gpu')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
+             
+    # Referer Spoofing (Try to look like we come from Google)
+    options.add_argument('--referrer=https://www.google.com/')
     
     # 2. Random Window Size
     window_sizes = ["1920,1080", "1366,768", "1536,864", "1440,900", "1280,720"]
@@ -149,6 +169,9 @@ def scrape_item(driver, item_config):
     logger.info(f"Navigating to: {url}")
     driver.get(url)
     random_sleep(2.0, 4.0) # Jitter after load
+    
+    if check_for_block(driver):
+        raise Exception("Navegación bloqueada por CloudFront/Wallapop (Title: ERROR)")
     
     # Cookie/Privacy Banner
     try:
@@ -240,6 +263,10 @@ def scrape_item(driver, item_config):
         while n < n_scrolls_cada_vez:
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             random_sleep(1.0, 2.5) # Random sleep between main scrolls
+            
+            if check_for_block(driver):
+                 raise Exception("Bloqueo detectado durante el scroll.")
+                 
             n += 1
             print(f"scroll {n}")
     except Exception as e:

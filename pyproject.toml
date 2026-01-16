@@ -16,7 +16,8 @@ dependencies = [
     "beautifulsoup4",
     "requests",
     "undetected-chromedriver",
-    "setuptools"
+    "setuptools",
+    "fake-useragent>=2.2.0",
 ]
 
 [tool.uv]

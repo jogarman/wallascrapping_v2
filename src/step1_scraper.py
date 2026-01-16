@@ -15,6 +15,9 @@ import distutils
 import os
 from datetime import datetime
 
+import random
+from fake_useragent import UserAgent
+
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
@@ -28,8 +31,36 @@ logger = logging.getLogger(__name__)
 
 import undetected_chromedriver as uc
 
+def save_debug_html(driver, prefix="error"):
+    """Saves the current page source to a file for debugging."""
+    try:
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        debug_html_path = DATA_DIR / f"{prefix}-{timestamp_str}.html"
+        # Ensure directory exists
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        with open(debug_html_path, "w", encoding="utf-8") as f:
+            f.write(driver.page_source)
+        logger.info(f"DEBUG: Page source saved to {debug_html_path}")
+    except Exception as e:
+        logger.error(f"Failed to save debug HTML: {e}")
+
+def random_sleep(min_seconds=0.5, max_seconds=2.0):
+    """Sleeps for a random amount of time to simulate human behavior."""
+    sleep_time = random.uniform(min_seconds, max_seconds)
+    time.sleep(sleep_time)
+
 def setup_driver():
     options = uc.ChromeOptions()
+    
+    # 1. Random User-Agent
+    try:
+        ua = UserAgent()
+        random_ua = ua.random
+        logger.info(f"Using Random User-Agent: {random_ua}")
+        options.add_argument(f'user-agent={random_ua}')
+    except Exception as e:
+        logger.warning(f"Could not load fake-useragent: {e}. using default.")
+
     if CONFIG["scraping"].get("headless", True):
         # UC expects this for headless
         options.add_argument('--headless=new') 
@@ -37,8 +68,12 @@ def setup_driver():
     options.add_argument('--disable-gpu')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-    options.add_argument('--window-size=1920,1080')
+    
+    # 2. Random Window Size
+    window_sizes = ["1920,1080", "1366,768", "1536,864", "1440,900", "1280,720"]
+    selected_size = random.choice(window_sizes)
+    logger.info(f"Using Random Window Size: {selected_size}")
+    options.add_argument(f'--window-size={selected_size}')
     
     # Enable shadow-root (UC handles this well, but just in case)
     
@@ -113,18 +148,7 @@ def scrape_item(driver, item_config):
     url = build_url(item_config)
     logger.info(f"Navigating to: {url}")
     driver.get(url)
-
-    # DEBUG: Save HTML execution
-    try:
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        debug_html_path = DATA_DIR / f"web-{timestamp_str}.html"
-        # Ensure directory exists (DATA_DIR should exist, but just in case)
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        with open(debug_html_path, "w", encoding="utf-8") as f:
-            f.write(driver.page_source)
-        logger.info(f"DEBUG: Page source saved to {debug_html_path}")
-    except Exception as e:
-        logger.error(f"Failed to save debug HTML: {e}")
+    random_sleep(2.0, 4.0) # Jitter after load
     
     # Cookie/Privacy Banner
     try:
@@ -142,14 +166,26 @@ def scrape_item(driver, item_config):
     logger.info("Iniciando ciclo de búsqueda del botón 'Cargar más' (10 intentos)...")
 
     # Script to find the button even inside Shadow DOM
+    # Script to find the button even inside Shadow DOM
     script = """
     return (function() {
+        // Target class from logs
+        const targetClass = 'walla-button__button walla-button__button--medium walla-button__button--primary';
+        
         const candidates = document.querySelectorAll('walla-button');
         for (const host of candidates) {
+            // Priority 1: Check host text
             if (host.innerText && (host.innerText.toLowerCase().includes('cargar más') || host.innerText.toLowerCase().includes('ver más') || host.innerText.toLowerCase().includes('load'))) {
                 return host;
             }
+            
+            // Check in Shadow DOM
             if (host.shadowRoot) {
+                // Priority 2: Check by specific Class inside Shadow DOM
+                const classBtn = host.shadowRoot.querySelector(`button[class='${targetClass}']`);
+                if (classBtn) return classBtn;
+
+                // Priority 3: Check by text inside Shadow DOM (fallback)
                 const innerBtn = host.shadowRoot.querySelector('button');
                 if (innerBtn) {
                         const txt = innerBtn.innerText || innerBtn.textContent;
@@ -165,7 +201,7 @@ def scrape_item(driver, item_config):
 
     for i in range(10):
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(0.5)
+        random_sleep(0.5, 1.5) # Jitter between scrolls
         
         # 2. Search & Click cargar más
         try:
@@ -177,7 +213,7 @@ def scrape_item(driver, item_config):
                 logger.info(f"Identificadores del botón para futuro uso: ID='{btn_id}', Class='{btn_class}'")
                 
                 driver.execute_script("arguments[0].scrollIntoView(true);", boton_ver_mas)
-                time.sleep(0.5)
+                random_sleep(0.5, 1.0)
                 try:
                     boton_ver_mas.click()
                 except:
@@ -191,6 +227,7 @@ def scrape_item(driver, item_config):
 
     if not button_found:
          logger.error("Botón no encontrado tras 10 intentos (Scroll + Search).")
+         save_debug_html(driver, prefix="error_load_more")
          raise Exception("Botón no encontrado")
          
     time.sleep(0.5)
@@ -202,7 +239,7 @@ def scrape_item(driver, item_config):
     try:
         while n < n_scrolls_cada_vez:
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(1)
+            random_sleep(1.0, 2.5) # Random sleep between main scrolls
             n += 1
             print(f"scroll {n}")
     except Exception as e:
@@ -217,6 +254,10 @@ def scrape_item(driver, item_config):
         driver.save_screenshot(screenshot_path)
         logger.error(f"No items found! Screenshot saved to {screenshot_path}")
         logger.info(f"Current URL: {driver.current_url}")
+        
+        # Save HTML for debug
+        save_debug_html(driver, prefix="error_no_items")
+        
         raise Exception("Scraping failed: No items found in DOM.")
         
     data = []

@@ -15,6 +15,9 @@ dependencies = [
     "undetected-chromedriver",
     "setuptools",
     "fake-useragent>=2.2.0",
+    "google-cloud-bigquery",
+    "pandas-gbq",
+    "db-dtypes",
 ]
 
 [tool.uv]

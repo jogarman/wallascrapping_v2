@@ -373,6 +373,7 @@ def scrape_item(driver, item_config):
                 "precio": price,
                 "url_articulo": link,
                 "municipio": item_config["filters"].get("municipio"),
+                "distancia": item_config["filters"].get("distancia", "50"),
                 "search_term": item_config["name"]
             })
         except Exception as e:
@@ -395,7 +396,7 @@ def run_scraper():
             except Exception as e:
                 logger.error(f"Error scraping {item['name']}: {e}")
                 raise e
-            
+
         if all_dfs:
             final_df = pd.concat(all_dfs, ignore_index=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M")
@@ -406,6 +407,7 @@ def run_scraper():
             
             final_df.to_csv(output_path, index=False)
             logger.info(f"Scraping finished. Saved {len(final_df)} items to {output_path}")
+            
         else:
             logger.warning("No data scraped.")
             

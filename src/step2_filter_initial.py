@@ -1,6 +1,8 @@
 import logging
 import pandas as pd
 from pathlib import Path
+import re
+from datetime import datetime
 from .config import DATA_DIR, CONFIG
 # from .tracker import load_tracker, update_tracker, get_existing_ids, mark_as_filtered
 
@@ -120,6 +122,7 @@ def run_initial_filter():
                 clean_price = "0"
             
             price_val = float(clean_price)
+            row["precio"] = price_val # Update with numeric value
             min_price = item_config.get("filters", {}).get("precio_min", 0)
             
             if price_val < min_price:
@@ -130,11 +133,26 @@ def run_initial_filter():
         
         return True, "OK"
 
-    for _, row in df_new.iterrows():
+    included_rows = []
+    excluded_rows = []
+    
+    current_time = datetime.now()
+    
+    # 2. Iterate and check
+    for index, row in df_new.iterrows():
+        # Initialize tracking columns
+        row["created"] = current_time
+        row["modified"] = current_time
+        row["last_view"] = current_time
+        
         is_ok, reason = check_filter(row)
+        
         if is_ok:
+            row["filter_status"] = "included"
+            row["filter_reason"] = None
             included_rows.append(row)
         else:
+            row["filter_status"] = "excluded"
             row["filter_reason"] = reason
             excluded_rows.append(row)
 

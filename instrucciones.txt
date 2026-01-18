@@ -1,5 +1,5 @@
 Proyecto para escrapear iphones de wallapop empleando github actions.
-
+INTENCION INICIAL. NO CUADRA CON LA REALIDAD
 1- infraestructura
 Se empleará github actions. Se empleará crone para marcar cuando ejecutar el script.
 Programa en python

@@ -41,9 +41,7 @@ def run_step(step_func, step_name, max_retries=3):
 
 from .step1_scraper import run_scraper
 from .step2_filter_initial import run_initial_filter
-from .step3_filter_logic import run_business_logic_filter
-from .step4_enrich_gemini_basic import run_gemini_enrichment
-from .step5_finalize import run_finalization
+from .step3_bq_sync import run_sync
 from .notifier import notify_completion, notify_error
 
 import os
@@ -62,10 +60,6 @@ def main():
         logger.info("Running in Apify environment...")
         try:
             client = ApifyClient()
-            # In local dev (not strictly on platform), default_key_value_store_client might need setup
-            # But usually we just read INPUT.json manually or rely on env vars if pushed to platform
-            # Simpler approach: Check for Actor Input
-            # For this MVP, we will just proceed. Real integration would read the Key-Value store.
             pass
         except Exception as e:
             logger.warning(f"Apify setup warning: {e}")
@@ -118,20 +112,10 @@ def main():
             notify_error("Step 2 failed.")
             sys.exit(1)
 
-        # 3. Business Logic Filter
-        # if not run_step(run_business_logic_filter, "Step 3: Business Logic (Blacklist/Whitelist)"):
-        #     notify_error("Step 3 failed.")
-        #     sys.exit(1)
-
-        # 4. Gemini Enrichment
-        # if not run_step(run_gemini_enrichment, "Step 4: Gemini Enrichment"):
-        #     notify_error("Step 4 failed.")
-        #     sys.exit(1)
-            
-        # 5. Finalize
-        # if not run_step(run_finalization, "Step 5: Finalize"):
-        #     notify_error("Step 5 failed.")
-        #     sys.exit(1)
+        # 3. BigQuery Sync
+        if not run_step(run_sync, "Step 3: BigQuery Sync"):
+            notify_error("Step 3: BigQuery Sync failed.")
+            sys.exit(1)
             
         # Placeholder for future steps
         logger.info("All steps completed.")

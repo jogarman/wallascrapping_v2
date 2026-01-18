@@ -119,19 +119,19 @@ def main():
             sys.exit(1)
 
         # 3. Business Logic Filter
-        if not run_step(run_business_logic_filter, "Step 3: Business Logic (Blacklist/Whitelist)"):
-            notify_error("Step 3 failed.")
-            sys.exit(1)
+        # if not run_step(run_business_logic_filter, "Step 3: Business Logic (Blacklist/Whitelist)"):
+        #     notify_error("Step 3 failed.")
+        #     sys.exit(1)
 
         # 4. Gemini Enrichment
-        if not run_step(run_gemini_enrichment, "Step 4: Gemini Enrichment"):
-            notify_error("Step 4 failed.")
-            sys.exit(1)
+        # if not run_step(run_gemini_enrichment, "Step 4: Gemini Enrichment"):
+        #     notify_error("Step 4 failed.")
+        #     sys.exit(1)
             
         # 5. Finalize
-        if not run_step(run_finalization, "Step 5: Finalize"):
-            notify_error("Step 5 failed.")
-            sys.exit(1)
+        # if not run_step(run_finalization, "Step 5: Finalize"):
+        #     notify_error("Step 5 failed.")
+        #     sys.exit(1)
             
         # Placeholder for future steps
         logger.info("All steps completed.")

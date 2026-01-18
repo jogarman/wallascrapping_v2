@@ -24,7 +24,7 @@ def run_business_logic_filter():
     4. Save to step 3.
     """
     # Find latest file in step2
-    step2_dir = DATA_DIR / "step2"
+    step2_dir = DATA_DIR / "step2_inc"
     files = list(step2_dir.glob("filtered_*.csv"))
     if not files:
         logger.warning("No step 2 data found.")

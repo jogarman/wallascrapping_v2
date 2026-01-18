@@ -30,47 +30,18 @@ def run_initial_filter():
         logger.warning("Raw file is empty.")
         return
 
-    # Filter against tracker first (we only want to process new IDs)
-    # existing_ids = get_existing_ids()
-    # new_items_mask = ~df["id"].isin(existing_ids)
-    # df_new = df[new_items_mask].copy()
     df_new = df.copy() # FORCE ALL (Tracker ignored)
-    
-    # if df_new.empty:
-    #    logger.info("No new items to process.")
-    #    return
-    
-    # if df_new.empty:
-    #    logger.info("No new items to process.")
-    #    return
-    
-    # if df_new.empty:
-    #    logger.info("No new items to process.")
-    #    return
-    
-    # if df_new.empty:
-    #    logger.info("No new items to process.")
-    #    return
-    
+
     if df_new.empty:
         logger.info("No new items to process.")
         return
 
-    # Update tracker with newly seen IDs immediately
-    # update_tracker(df_new)
-
-    # ---------------------------------------------------------
-    # Apply Keyword Filtering (Inclusion / Exclusion)
-    # ---------------------------------------------------------
-    # We need to map items back to their config rules. 
-    # 'search_term' column in CSV helps us know which rule applied.
-    
     included_rows = []
     excluded_rows = []
 
     import re
 
-    # Helper function to check keywords (Legacy Logic Replication)
+    # Helper function to check keywords
     def check_filter(row):
         title = str(row.get("nombre", "")).lower()
         search_term = str(row.get("search_term", "")).lower()
@@ -80,88 +51,83 @@ def run_initial_filter():
 
         # Find config for this search term
         item_config = next((item for item in CONFIG["search_items"] if item["name"].lower() == search_term), None)
-        
         if not item_config:
             return False, "Config not found"
 
-        # Updated logic: Split by non-alphanumeric characters AND split numbers from letters (e.g. "11pro" -> "11", "pro")
-        # This allows "iPhone 11pro" to match "iPhone 11"
-        tokens_list = re.findall(r'[a-zA-Z]+|\d+', title)
-        if not tokens_list:
-             return False, "No tokens found"
-             
-        title_tokens = set(tokens_list)
-        first_token = tokens_list[0].lower()
-
+        # Separate letters and numbers (e.g., "iphone12" -> "iphone 12")
+        title = re.sub(r'([a-z])(\d)', r'\1 \2', title)
+        title = re.sub(r'(\d)([a-z])', r'\1 \2', title)
+        
+        # Remove punctuation (except hyphens and underscores which are word separators)
+        title = re.sub(r'[^\w\s\-_]', ' ', title)
+        
+        # Split title into words (by spaces, hyphens, underscores)
+        words = re.split(r'[\s\-_]+', title)
+        words = [w for w in words if w]  # Remove empty strings
+        
+        if not words:
+            return False, "No words found"
+        
+        first_word = words[0]
+        
+        # Load blacklists
         start_exclude_keywords = set()
         exclude_keywords = set()
-
-        # Load blacklists from file if defined
+        
         if "blacklist_dir" in item_config:
             blacklist_path = Path(item_config["blacklist_dir"])
             
-            # First word blacklist
             first_word_file = blacklist_path / "first_word_blacklist.txt"
             if first_word_file.exists():
                 with open(first_word_file, "r", encoding="utf-8") as f:
                     start_exclude_keywords = set(line.strip().lower() for line in f if line.strip())
             
-            # Rest of words blacklist
             rest_file = blacklist_path / "rest_of_words_blacklist.txt"
             if rest_file.exists():
                 with open(rest_file, "r", encoding="utf-8") as f:
                     exclude_keywords = set(line.strip().lower() for line in f if line.strip())
+        
+        # 1. Check if first word is in blacklist
+        if first_word in start_exclude_keywords:
+            return False, f"First word excluded: {first_word}"
+        
+        # 2. Get search term words (e.g., "iphone 16" -> ["iphone", "16"])
+        search_words = search_term.split()
+        if not search_words:
+            return False, "Invalid search term"
+        
+        search_first_word = search_words[0]
+        
+        # 3. Check if title starts with search term first word
+        if first_word != search_first_word:
+            # 4. Check for blacklisted words in rest of title
+            if any(word in exclude_keywords for word in words):
+                matched = next((word for word in words if word in exclude_keywords), "unknown")
+                return False, f"Blacklisted word: {matched}"
             
-            # DEBUG
-            # print(f"DEBUG: Start Exclusions: {start_exclude_keywords}")
-        else:
-             # Fallback to config lists (legacy support or inline config)
-             start_exclude_keywords = set(k.lower() for k in item_config.get("start_exclude_keywords", []))
-             exclude_keywords = set(k.lower() for k in item_config.get("exclude_keywords", []))
-
-        # 1. Start Exclusion (First word only)
-        if first_token[0].isdigit():
-             return False, f"First char is digit: {first_token}"
-
-        if first_token in start_exclude_keywords:
-             return False, f"First word excluded: {first_token}"
-
-        # 2. General Exclusion (Anywhere)
-        # Intersection: if any excluded word appears in title tokens
-        common_exclusions = title_tokens.intersection(exclude_keywords)
-        if common_exclusions:
-            return False, f"Excluded term found: {common_exclusions}"
-
-        # 2. Check Inclusion (Token based)
-        # We will require ALL tokens of the search term to be in the title tokens.
-        required_tokens = set(re.findall(r'[a-zA-Z]+|\d+', search_term))
+            # 5. If search term has a second word (number), check it exists in title
+            if len(search_words) > 1:
+                search_number = search_words[1]
+                if search_number not in words:
+                    return False, f"Missing number: {search_number}"
         
-        if not required_tokens.issubset(title_tokens):
-            missing = required_tokens - title_tokens
-            return False, f"Missing required tokens: {missing}"
-        
-        # 3. Check Price
-        # Parse price from string like "1.200 €" or "10,50 €"
+        # 6. Check Price
         raw_price = str(row.get("precio", "0"))
         try:
             # Remove '€' and '.' (thousands), replace ',' with '.' (decimal)
             clean_price = raw_price.replace("€", "").replace(".", "").replace(",", ".").strip()
-            # Handle empty string if price was just symbol
-            if not clean_price: 
+            if not clean_price:
                 clean_price = "0"
-                
-            price_val = float(clean_price)
             
-            # Get min price from config (default 0 if not set)
+            price_val = float(clean_price)
             min_price = item_config.get("filters", {}).get("precio_min", 0)
             
             if price_val < min_price:
-                 return False, f"Price too low: {price_val} < {min_price}"
+                return False, f"Price too low: {price_val} < {min_price}"
         except ValueError:
-            # If price cannot be parsed (e.g. "A convenir"), we default to keeping it 
-            # or could log a warning. For now, pass.
-            pass 
-
+            # If price cannot be parsed, keep it
+            pass
+        
         return True, "OK"
 
     for _, row in df_new.iterrows():
@@ -169,7 +135,6 @@ def run_initial_filter():
         if is_ok:
             included_rows.append(row)
         else:
-            # Add reason to row for debugging
             row["filter_reason"] = reason
             excluded_rows.append(row)
 

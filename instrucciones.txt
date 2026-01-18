@@ -55,3 +55,14 @@ Cambiar el archivo de configuración con lo que hay que escrapear
 Ver los resultados
 Ver los logs
 Recibir notificaciones cuando se activen alarmas. Las alarmas serán relativas a cierto articulo por debajo de X precio.
+
+
+
+
+CÓMO FUNCIONA EL FILTRO:
+toma el nombre del articulo como la cadena a analizar en minusculas. Si una palabra (cadena entre espacios, guiones o barras bajas "_") contiene letras y números los separas, por ejemplo iphone12 -> iphone 12
+Si empieza por una de las palabras en first_word_blacklist.txt
+lo descartas y terminas. 
+Si empieza por la primera palabra del nombre del nombre de la busqueda (en nuestro caso "iphone") compruebas:
+-Si contiene palabras en la rest_of_words_blacklist lo descartas inmediatamente.
+-Si no las contiene comprueba que contiene el número de la seguna palabra del nombre de busqueda, en nuestro caso 16, (de iphone 16)

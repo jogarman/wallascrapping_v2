@@ -29,6 +29,9 @@ env/
 # Environment variables
 .env
 
+# Credentials folder
+config/claves/
+
 # Data
 data/*
 !data/.gitkeep
